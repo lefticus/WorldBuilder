@@ -229,11 +229,9 @@ struct Map
 
     double sum_of_probabilities = probabilities[0].first; // for background
 
-    for (std::vector<Map_Region>::const_iterator itr = regions.begin();
-         itr != regions.end();
-         ++itr)
+    for (const Map_Region &region: regions)
     {
-      std::pair<int, int> pos = get_position(t_map_width, t_map_height, itr->location);
+      auto pos = get_position(t_map_width, t_map_height, region.location);
       int distance = get_distance(pos.first, pos.second, t_x, t_y);
       double weight = distance>max_distance?0:(double(max_distance - distance) / double(max_distance));
 
@@ -241,17 +239,15 @@ struct Map
       {
         sum_of_probabilities += weight;
 
-        probabilities.push_back(std::make_pair(weight, itr->type));
+        probabilities.push_back(std::make_pair(weight, region.type));
       }
     }
 
 
     // Normalize probabilities
-    for (std::vector<std::pair<double, Type> >::iterator itr = probabilities.begin();
-         itr != probabilities.end();
-         ++itr)
+    for (auto &probability: probabilities)
     {
-      itr->first = itr->first / sum_of_probabilities;
+      probability.first = probability.first / sum_of_probabilities;
     }
 
     return probabilities;
@@ -282,13 +278,11 @@ struct Map
     {
       for (int y = 0; y < t_map_height; ++y)
       {
-        std::vector<std::pair<double, Type> > probabilities = get_probabilities(t_map_width, t_map_height, x, y);
+        auto probabilities = get_probabilities(t_map_width, t_map_height, x, y);
 
-        for (std::vector<std::pair<double, Type> >::const_iterator itr = probabilities.begin();
-             itr != probabilities.end();
-             ++itr)
+        for (const auto &probability: probabilities)
         {
-          ofs << itr->first << " " << to_string(itr->second) << " ";
+          ofs << probability.first << " " << to_string(probability.second) << " ";
         }
 
         ofs << ", ";
@@ -307,16 +301,14 @@ struct Map
 
     double total = 0;
 
-    for (std::vector<std::pair<double, Type> >::const_iterator itr = probabilities.begin();
-         itr != probabilities.end();
-         ++itr)
+    for (const auto &probability: probabilities)
     {
-      if (val > total && val <= itr->first + total)
+      if (val > total && val <= probability.first + total)
       {
-        return itr->second;
+        return probability.second;
       }
       
-      total += itr->first;
+      total += probability.first;
     }
 
     assert(!"We cannot reach here");
