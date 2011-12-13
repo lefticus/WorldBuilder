@@ -9,7 +9,7 @@
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
 
-
+#include <random>
 
 
 class Surface
@@ -42,7 +42,7 @@ class Surface
       dest.y=0;
       dest.w=m_surface->w;
       dest.h=m_surface->h;
-//      SDL_SetAlpha(m_surface, SDL_SRCALPHA, SDL_ALPHA_OPAQUE);
+      //      SDL_SetAlpha(m_surface, SDL_SRCALPHA, SDL_ALPHA_OPAQUE);
       SDL_FillRect(m_surface, &dest, SDL_MapRGBA(m_surface->format, 0, 0, 0, SDL_ALPHA_TRANSPARENT));
     }
 
@@ -157,7 +157,7 @@ enum Location
   SouthWest
 };
 
-enum Type
+enum Terrain_Type
 {
   Mountain,
   Plain,
@@ -166,238 +166,330 @@ enum Type
 };
 
 
-struct Map_Region
+struct Map_Terrain
 {
-  Map_Region(Location t_location, Type t_type)
+  Map_Terrain(Location t_location, Terrain_Type t_type)
     : location(t_location), type(t_type)
   {
   }
 
   Location location;
-  Type type;
+  Terrain_Type type;
 };
 
-struct Map
+struct Map_Location
 {
-  Type background;
+  Terrain_Type type;
 
-  std::vector<Map_Region> regions;
+  std::vector<std::pair<double, Terrain_Type>> probabilities;
+};
 
-  std::pair<int, int> get_position(int t_map_width, int t_map_height, Location t_location)
-  {
-    switch (t_location)
+class Map
+{
+  public:
+    Map(int t_width, int t_height, Terrain_Type t_background)
+      : m_width(t_width), m_height(t_height), m_background(t_background), m_seed(0)
     {
-      case NorthEast:
-        return std::make_pair(t_map_width * 5 / 6, t_map_height / 6);
-      case North:
-        return std::make_pair(t_map_width / 2, t_map_height / 6);
-      case NorthWest:
-        return std::make_pair(t_map_width / 6, t_map_height / 6);
-      case East:
-        return std::make_pair(t_map_width * 5 / 6, t_map_height / 2);
-      case Central:
-        return std::make_pair(t_map_width / 2, t_map_height / 2);
-      case West:
-        return std::make_pair(t_map_width / 6, t_map_height / 2);
-      case SouthEast:
-        return std::make_pair(t_map_width * 5 / 6, t_map_height * 5 / 6);
-      case South:
-        return std::make_pair(t_map_width / 2, t_map_height * 5 / 6);
-      case SouthWest:
-        return std::make_pair(t_map_width / 6, t_map_height * 5 / 6);
+      m_map = render();
     }
-    assert(!"Unknown location type");
-  }
 
-  int get_distance(int t_x1, int t_y1, int t_x2, int t_y2)
-  {
-    double xdist = abs(t_x1 - t_x2);
-    double ydist = abs(t_y1 - t_y2);
-
-    return floor(sqrt(xdist * xdist + ydist * ydist) + .5);
-  }
-
-  std::vector<std::pair<double, Type> > get_probabilities(int t_map_width, int t_map_height, int t_x, int t_y)
-  {
-    std::vector<std::pair<double, Type> > probabilities;
-    
-    //add base probability
-    probabilities.push_back(std::make_pair(.05, background));
-
-
-    int max_distance = std::min(t_map_width, t_map_height) / 2;
-
-    double sum_of_probabilities = probabilities[0].first; // for background
-
-    for (const Map_Region &region: regions)
+    void add_terrain(Map_Terrain t_terrain)
     {
-      auto pos = get_position(t_map_width, t_map_height, region.location);
-      int distance = get_distance(pos.first, pos.second, t_x, t_y);
-      double weight = distance>max_distance?0:(double(max_distance - distance) / double(max_distance));
+      m_terrains.push_back(t_terrain);
+      m_map = render();
+    }
 
-      if (weight > 0)
+    void render_sdl(Screen &t_screen) const
+    {
+      Object mountain("mountainvoxel.png");
+      Object swamp("swampvoxel.png");
+      Object water("watervoxel.png");
+
+      t_screen.getSurface().clear();
+
+      for (int x = 0; x < m_width; ++x)
       {
-        sum_of_probabilities += weight;
-
-        probabilities.push_back(std::make_pair(weight, region.type));
-      }
-    }
-
-
-    // Normalize probabilities
-    for (auto &probability: probabilities)
-    {
-      probability.first = probability.first / sum_of_probabilities;
-    }
-
-    return probabilities;
-  }
-
-  std::string to_string(Type t_t)
-  {
-    switch (t_t)
-    {
-      case Mountain:
-        return "Mountain";
-      case Plain:
-        return "Plain";
-      case Swamp:
-        return "Swamp";
-      case Water:
-        return "Water";
-    }
-
-    assert(!"unknown type");
-  }
-
-  void dump_probabilities(const std::string &t_filename, int t_map_width, int t_map_height)
-  {
-    std::ofstream ofs(t_filename.c_str());
-
-    for (int x = 0; x < t_map_width; ++x)
-    {
-      for (int y = 0; y < t_map_height; ++y)
-      {
-        auto probabilities = get_probabilities(t_map_width, t_map_height, x, y);
-
-        for (const auto &probability: probabilities)
+        for (int y = 0; y < m_height; ++y)
         {
-          ofs << probability.first << " " << to_string(probability.second) << " ";
+          Terrain_Type t = m_map.at(y).at(x).type;
+
+          int renderx = x * 16 - 4;
+          int rendery = y * 16 - 4;
+
+          switch (t)
+          {
+            case Mountain:
+              mountain.render(t_screen.getSurface(), renderx, rendery);
+              break;
+            case Swamp:
+              swamp.render(t_screen.getSurface(), renderx, rendery);
+              break;
+            case Water:
+              water.render(t_screen.getSurface(), renderx, rendery);
+              break;
+          };
+        }
+      }
+
+      t_screen.getSurface().flip();
+    }
+
+    void dump_probabilities(const std::string &t_filename)
+    {
+      std::ofstream ofs(t_filename.c_str());
+
+      for (int x = 0; x < m_width; ++x)
+      {
+        for (int y = 0; y < m_height; ++y)
+        {
+          for (const auto &probability: m_map.at(y).at(x).probabilities)
+          {
+            ofs << probability.first << " " << to_string(probability.second) << " ";
+          }
+
+          ofs << ", ";
         }
 
-        ofs << ", ";
+        ofs << "\n";
       }
 
-      ofs << "\n";
     }
 
-  }
 
-  Type render_position(int t_map_width, int t_map_height, int t_x, int t_y)
-  {
-    std::vector<std::pair<double, Type> > probabilities = get_probabilities(t_map_width, t_map_height, t_x, t_y);
+  private:
+    int m_width;
+    int m_height;
+    Terrain_Type m_background;
+    std::vector<Map_Terrain> m_terrains;
+    int m_seed;
 
-    double val = double(rand()) / double(RAND_MAX);
+    std::vector<std::vector<Map_Location>> m_map;
 
-    double total = 0;
-
-    for (const auto &probability: probabilities)
+    static std::vector<std::vector<Map_Location>> create_map(int t_width, int t_height)
     {
-      if (val > total && val <= probability.first + total)
+      std::vector<std::vector<Map_Location>> result;
+      for (int height = 0; height < t_height; ++height)
       {
-        return probability.second;
-      }
-      
-      total += probability.first;
-    }
-
-    assert(!"We cannot reach here");
-  }
-
-  void render_html(const std::string &t_filename, int t_map_width, int t_map_height)
-  {
-
-    std::ofstream ofs(t_filename.c_str());
-
-    ofs << "<table>";
-    for (int x = 0; x < t_map_width; ++x)
-    {
-      ofs << "<tr>";
-      for (int y = 0; y < t_map_height; ++y)
-      {
-        ofs << "<td>";
-        Type t = render_position(t_map_width, t_map_height, x, y);
-
-        ofs << to_string(t);
-        ofs << "</td>";
+        result.push_back(std::vector<Map_Location>(t_width));
       }
 
-      ofs << "</tr>";
+      return result;
     }
-    ofs << "</table>";
-  }
 
-
-
-  void render_sdl(Screen &t_screen, int t_map_width, int t_map_height)
-  {
-    Object mountain("mountainvoxel.png");
-    Object swamp("swampvoxel.png");
-    Object water("watervoxel.png");
-
-    t_screen.getSurface().clear();
-
-    for (int x = 0; x < t_map_width; ++x)
+    void render_terrain_probabilities(std::vector<std::vector<Map_Location>> &t_map, std::mt19937 &t_engine)
     {
-      for (int y = 0; y < t_map_height; ++y)
+      int max_distance = std::min(m_width, m_height) / 2;
+
+      for (const Map_Terrain &terrain: m_terrains)
       {
-        Type t = render_position(t_map_width, t_map_height, x, y);
+        auto position = get_position(m_width, m_height, terrain.location, t_engine);
 
-        int renderx = x * 16 - 4;
-        int rendery = y * 16 - 4;
-
-        switch (t)
+        for (int x = 0; x < m_width; ++x)
         {
-          case Mountain:
-            mountain.render(t_screen.getSurface(), renderx, rendery);
-            break;
-          case Swamp:
-            swamp.render(t_screen.getSurface(), renderx, rendery);
-            break;
-          case Water:
-            water.render(t_screen.getSurface(), renderx, rendery);
-            break;
-        };
+          for (int y = 0; y < m_height; ++y)
+          {
+            int distance = get_distance(position.first, position.second, x, y);
+            double weight = distance>max_distance?0:(double(max_distance - distance) / double(max_distance));
+
+            if (t_map.at(y).at(x).probabilities.empty())
+            {
+              // add background probability
+              t_map.at(y).at(x).probabilities.push_back(std::make_pair(.05, m_background));
+            }
+
+            if (weight > 0)
+            {
+              t_map.at(y).at(x).probabilities.push_back(std::make_pair(weight, terrain.type));
+            }
+          }
+        }
+      }
+
+      normalize_probabilities(t_map);
+    }
+
+    std::vector<std::vector<Map_Location>> render() 
+    {
+      std::mt19937 engine(m_seed);
+
+      auto probability_map = create_map(m_width, m_height);
+      render_terrain_probabilities(probability_map, engine);
+      render_probabilities(probability_map, engine);
+
+      return probability_map;
+    }
+
+    static std::pair<int, int> get_position(int t_map_width, int t_map_height, Location t_location, std::mt19937 &t_engine) 
+    {
+      switch (t_location)
+      {
+        case NorthEast:
+          return std::make_pair(t_map_width * 5 / 6, t_map_height / 6);
+        case North:
+          return std::make_pair(t_map_width / 2, t_map_height / 6);
+        case NorthWest:
+          return std::make_pair(t_map_width / 6, t_map_height / 6);
+        case East:
+          return std::make_pair(t_map_width * 5 / 6, t_map_height / 2);
+        case Central:
+          return std::make_pair(t_map_width / 2, t_map_height / 2);
+        case West:
+          return std::make_pair(t_map_width / 6, t_map_height / 2);
+        case SouthEast:
+          return std::make_pair(t_map_width * 5 / 6, t_map_height * 5 / 6);
+        case South:
+          return std::make_pair(t_map_width / 2, t_map_height * 5 / 6);
+        case SouthWest:
+          return std::make_pair(t_map_width / 6, t_map_height * 5 / 6);
+      }
+      assert(!"Unknown location type");
+    }
+
+    int get_distance(int t_x1, int t_y1, int t_x2, int t_y2)
+    {
+      double xdist = abs(t_x1 - t_x2);
+      double ydist = abs(t_y1 - t_y2);
+
+      return floor(sqrt(xdist * xdist + ydist * ydist) + .5);
+    }
+
+    void normalize_probabilities(std::vector<std::vector<Map_Location>> &t_map) const
+    {
+      for (auto &outer: t_map)
+      {
+        for (auto &inner: outer)
+        {
+          double sum_of_probabilities = 0;
+
+          for (const auto &probability: inner.probabilities)
+          {
+            sum_of_probabilities += probability.first;
+          }
+
+          for (auto &probability: inner.probabilities)
+          {
+            probability.first = probability.first / sum_of_probabilities;
+          }
+        }
       }
     }
 
-    t_screen.getSurface().flip();
-  }
+    void render_probabilities(std::vector<std::vector<Map_Location>> &t_map, std::mt19937 &t_engine)
+    {
+      std::uniform_real_distribution<double> distribution(0, 1.0);
+
+      for (auto &outer: t_map)
+      {
+        for (auto &inner: outer)
+        {
+          double val = distribution(t_engine);
+
+          double total = 0;
+
+          for (const auto &probability: inner.probabilities)
+          {
+            if (val > total && val <= probability.first + total)
+            {
+              inner.type = probability.second;
+              break;
+            }
+
+            total += probability.first;
+          }
+
+        }
+      }
+    }
+
+
+    std::string to_string(Terrain_Type t_t)
+    {
+      switch (t_t)
+      {
+        case Mountain:
+          return "Mountain";
+        case Plain:
+          return "Plain";
+        case Swamp:
+          return "Swamp";
+        case Water:
+          return "Water";
+      }
+
+      assert(!"unknown type");
+    }
+
+
+       /*
+       Terrain_Type render_position(int t_map_width, int t_map_height, int t_x, int t_y)
+       {
+       std::vector<std::pair<double, Terrain_Type> > probabilities = get_probabilities(t_map_width, t_map_height, t_x, t_y);
+
+       double val = double(rand()) / double(RAND_MAX);
+
+       double total = 0;
+
+       for (const auto &probability: probabilities)
+       {
+       if (val > total && val <= probability.first + total)
+       {
+       return probability.second;
+       }
+
+       total += probability.first;
+       }
+
+       assert(!"We cannot reach here");
+       }
+
+       void render_html(const std::string &t_filename, int t_map_width, int t_map_height)
+       {
+
+       std::ofstream ofs(t_filename.c_str());
+
+       ofs << "<table>";
+       for (int x = 0; x < t_map_width; ++x)
+       {
+       ofs << "<tr>";
+       for (int y = 0; y < t_map_height; ++y)
+       {
+       ofs << "<td>";
+       Terrain_Type t = render_position(t_map_width, t_map_height, x, y);
+
+       ofs << to_string(t);
+       ofs << "</td>";
+       }
+
+       ofs << "</tr>";
+       }
+       ofs << "</table>";
+       }
+       */
+
+
 
 };
 
 
 int main()
 {
+  Map m(40,30, Swamp);
 
-  srand(time(0));
-  Map m;
-  m.background = Swamp;
 
-  m.regions.push_back(Map_Region(Central, Mountain));
-  m.regions.push_back(Map_Region(NorthEast, Mountain));
-  m.regions.push_back(Map_Region(NorthWest, Water));
-  m.regions.push_back(Map_Region(South, Swamp));
+  m.add_terrain(Map_Terrain(Central, Mountain));
+  m.add_terrain(Map_Terrain(NorthEast, Mountain));
+  m.add_terrain(Map_Terrain(NorthWest, Water));
+  m.add_terrain(Map_Terrain(South, Swamp));
 
-  m.dump_probabilities("probabilities.csv", 10, 10);
+  m.dump_probabilities("probabilities.csv");
 
-  m.render_html("map.html", 25, 25);
+//  m.render_html("map.html", 25, 25);
 
   Screen screen;
 
   for (int i = 0; i < 100; ++i)
   {
-    m.render_sdl(screen, 40, 30);
+    m.render_sdl(screen);
   //  sleep(1);
   }
 
