@@ -193,6 +193,12 @@ class Map
       m_map = render();
     }
 
+    void set_seed(int t_seed)
+    {
+      m_seed = t_seed;
+      m_map = render();
+    }
+
     void add_terrain(Map_Terrain t_terrain)
     {
       m_terrains.push_back(t_terrain);
@@ -319,28 +325,39 @@ class Map
       return probability_map;
     }
 
-    static std::pair<int, int> get_position(int t_map_width, int t_map_height, Location t_location, std::mt19937 &t_engine) 
+    static std::pair<int, int> get_position(int t_map_width, int t_map_height, Location t_location, std::mt19937 &t_engine)
+    {
+      auto ranges = get_position_range(t_map_width, t_map_height, t_location);
+
+      std::uniform_int_distribution<int> xdistribution(ranges.first.first, ranges.first.second);
+      std::uniform_int_distribution<int> ydistribution(ranges.second.first, ranges.second.second);
+
+      return std::make_pair(xdistribution(t_engine), ydistribution(t_engine));
+    }
+
+    static std::pair<std::pair<int, int>, std::pair<int, int>>
+      get_position_range(int t_map_width, int t_map_height, Location t_location)
     {
       switch (t_location)
       {
         case NorthEast:
-          return std::make_pair(t_map_width * 5 / 6, t_map_height / 6);
+          return std::make_pair(std::make_pair(t_map_width*2/3, t_map_width), std::make_pair(0, t_map_height/3));
         case North:
-          return std::make_pair(t_map_width / 2, t_map_height / 6);
+          return std::make_pair(std::make_pair(t_map_width/3, t_map_width*2/3), std::make_pair(0, t_map_height/3));
         case NorthWest:
-          return std::make_pair(t_map_width / 6, t_map_height / 6);
+          return std::make_pair(std::make_pair(0, t_map_width/3), std::make_pair(0, t_map_height/3));
         case East:
-          return std::make_pair(t_map_width * 5 / 6, t_map_height / 2);
+          return std::make_pair(std::make_pair(t_map_width*2/3, t_map_width), std::make_pair(t_map_height/3, t_map_height*2/3));
         case Central:
-          return std::make_pair(t_map_width / 2, t_map_height / 2);
+          return std::make_pair(std::make_pair(t_map_width/3, t_map_width*2/3), std::make_pair(t_map_height/3, t_map_height*2/3));
         case West:
-          return std::make_pair(t_map_width / 6, t_map_height / 2);
+          return std::make_pair(std::make_pair(0, t_map_width/3), std::make_pair(t_map_height/3, t_map_height*2/3));
         case SouthEast:
-          return std::make_pair(t_map_width * 5 / 6, t_map_height * 5 / 6);
+          return std::make_pair(std::make_pair(t_map_width*2/3, t_map_width), std::make_pair(t_map_height*2/3, t_map_height));
         case South:
-          return std::make_pair(t_map_width / 2, t_map_height * 5 / 6);
+          return std::make_pair(std::make_pair(t_map_width/3, t_map_width*2/3), std::make_pair(t_map_height*2/3, t_map_height));
         case SouthWest:
-          return std::make_pair(t_map_width / 6, t_map_height * 5 / 6);
+          return std::make_pair(std::make_pair(0, t_map_width/3), std::make_pair(t_map_height*2/3, t_map_height));
       }
       assert(!"Unknown location type");
     }
@@ -479,7 +496,7 @@ int main()
   m.add_terrain(Map_Terrain(Central, Mountain));
   m.add_terrain(Map_Terrain(NorthEast, Mountain));
   m.add_terrain(Map_Terrain(NorthWest, Water));
-  m.add_terrain(Map_Terrain(South, Swamp));
+  m.add_terrain(Map_Terrain(South, Mountain));
 
   m.dump_probabilities("probabilities.csv");
 
@@ -489,6 +506,7 @@ int main()
 
   for (int i = 0; i < 100; ++i)
   {
+    m.set_seed(i);
     m.render_sdl(screen);
   //  sleep(1);
   }
