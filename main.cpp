@@ -3,7 +3,9 @@
 #include <cstdlib>
 #include <cassert>
 #include <cmath>
-
+#include <map>
+#include <iostream>
+#include <algorithm>
 
 #include <stdexcept>
 #include <SDL/SDL.h>
@@ -142,6 +144,72 @@ class Object
 };
 
 
+struct Point
+{
+  Point(int t_x, int t_y)
+    : x(t_x), y(t_y)
+  {
+  }
+
+  int x;
+  int y;
+};
+
+struct Region
+{
+  std::vector<Region> subdivide(int t_horizontal, int t_vertical)
+  {
+    std::cout << " subdivide " << t_horizontal << " " << t_vertical << std::endl;
+    std::vector<Region> regions;
+
+    int width = abs(p2.x - p1.x);
+    int height = abs(p2.y - p1.y);
+
+    for (int w = 0; w < t_horizontal; ++w)
+    {
+      for (int h = 0; h < t_vertical; ++h)
+      {
+        regions.push_back(
+            {
+              { width * w / t_horizontal, height * h / t_vertical },
+              { width * (w + 1) / t_horizontal - ((w==t_horizontal-1)?0:1), height * (h + 1) / t_vertical - ((h==t_vertical-1)?0:1)}
+            }
+            );
+
+
+        std::cout << " subdivide " << regions.back().p1.x << " " << regions.back().p1.y << " " << regions.back().p2.x << " " << regions.back().p2.y << std::endl;
+
+
+      }
+    }
+
+
+
+    return regions;
+  }
+
+  Region(int t_width, int t_height)
+    : p1(0,0), p2(t_width-1, t_height-1)
+  {
+  }
+
+  Region(Point t_p1, Point t_p2)
+    : p1(t_p1), p2(t_p2)
+  {
+  }
+
+
+  Point choose_point(std::mt19937 &t_engine)
+  {
+    std::uniform_int_distribution<int> xdistribution(std::min(p1.x, p2.x), std::max(p1.x, p2.x));
+    std::uniform_int_distribution<int> ydistribution(std::min(p1.y, p2.y), std::max(p1.y, p2.y));
+
+    return Point(xdistribution(t_engine), ydistribution(t_engine));
+  }
+
+  Point p1;
+  Point p2;
+};
 
 
 enum Location
@@ -165,6 +233,22 @@ enum Terrain_Type
   Swamp
 };
 
+enum Feature_Type
+{
+  Cave,
+  Town
+};
+
+struct Map_Feature
+{
+  Map_Feature(Location t_location, Feature_Type t_type)
+    : location(t_location), type(t_type)
+  {
+  }
+
+  Location location;
+  Feature_Type type;
+};
 
 struct Map_Terrain
 {
@@ -179,16 +263,51 @@ struct Map_Terrain
 
 struct Map_Location
 {
-  Terrain_Type type;
+  Terrain_Type terrain;
+  Feature_Type feature;
 
   std::vector<std::pair<double, Terrain_Type>> probabilities;
 };
+
+struct Map_Data
+{
+  Map_Data(int t_width, int t_height)
+    : locations(create_map(t_width, t_height))
+  {
+  }
+
+  std::vector<std::vector<Map_Location>> locations;
+
+  Map_Location &at(Point t_p)
+  {
+    return locations.at(t_p.y).at(t_p.x);
+  }
+
+  const Map_Location &at(Point t_p) const
+  {
+    return locations.at(t_p.y).at(t_p.x);
+  }
+
+
+  static std::vector<std::vector<Map_Location>> create_map(int t_width, int t_height)
+  {
+    std::vector<std::vector<Map_Location>> result;
+    for (int height = 0; height < t_height; ++height)
+    {
+      result.push_back(std::vector<Map_Location>(t_width));
+    }
+
+    return result;
+  }
+};
+
 
 class Map
 {
   public:
     Map(int t_width, int t_height, Terrain_Type t_background)
-      : m_width(t_width), m_height(t_height), m_background(t_background), m_seed(0)
+      : m_width(t_width), m_height(t_height), m_background(t_background), m_seed(0),
+        m_map(t_width, t_height)
     {
       m_map = render();
     }
@@ -205,6 +324,14 @@ class Map
       m_map = render();
     }
 
+    void add_map_feature(Map_Feature t_feature)
+    {
+      m_features.push_back(t_feature);
+      m_map = render();
+    }
+
+
+
     void render_sdl(Screen &t_screen) const
     {
       Object mountain("mountainvoxel.png");
@@ -217,7 +344,7 @@ class Map
       {
         for (int y = 0; y < m_height; ++y)
         {
-          Terrain_Type t = m_map.at(y).at(x).type;
+          Terrain_Type t = m_map.at( {x, y} ).terrain;
 
           int renderx = x * 16 - 4;
           int rendery = y * 16 - 4;
@@ -248,7 +375,7 @@ class Map
       {
         for (int y = 0; y < m_height; ++y)
         {
-          for (const auto &probability: m_map.at(y).at(x).probabilities)
+          for (const auto &probability: m_map.at( {x, y} ).probabilities)
           {
             ofs << probability.first << " " << to_string(probability.second) << " ";
           }
@@ -267,22 +394,14 @@ class Map
     int m_height;
     Terrain_Type m_background;
     std::vector<Map_Terrain> m_terrains;
+    std::vector<Map_Feature> m_features;
     int m_seed;
 
-    std::vector<std::vector<Map_Location>> m_map;
+    Map_Data m_map;
 
-    static std::vector<std::vector<Map_Location>> create_map(int t_width, int t_height)
-    {
-      std::vector<std::vector<Map_Location>> result;
-      for (int height = 0; height < t_height; ++height)
-      {
-        result.push_back(std::vector<Map_Location>(t_width));
-      }
 
-      return result;
-    }
 
-    void render_terrain_probabilities(std::vector<std::vector<Map_Location>> &t_map, std::mt19937 &t_engine)
+    void render_terrain_probabilities(Map_Data &t_map, std::mt19937 &t_engine)
     {
       int max_distance = std::min(m_width, m_height) / 2;
 
@@ -294,18 +413,18 @@ class Map
         {
           for (int y = 0; y < m_height; ++y)
           {
-            int distance = get_distance(position.first, position.second, x, y);
+            int distance = get_distance(position.x, position.y, x, y);
             double weight = distance>max_distance?0:(double(max_distance - distance) / double(max_distance));
 
-            if (t_map.at(y).at(x).probabilities.empty())
+            if (t_map.at( {x, y} ).probabilities.empty())
             {
               // add background probability
-              t_map.at(y).at(x).probabilities.push_back(std::make_pair(.05, m_background));
+              t_map.at( {x, y} ).probabilities.push_back(std::make_pair(.05, m_background));
             }
 
             if (weight > 0)
             {
-              t_map.at(y).at(x).probabilities.push_back(std::make_pair(weight, terrain.type));
+              t_map.at( {x, y} ).probabilities.push_back(std::make_pair(weight, terrain.type));
             }
           }
         }
@@ -314,76 +433,75 @@ class Map
       normalize_probabilities(t_map);
     }
 
-    std::vector<std::vector<Map_Location>> render() 
+    Map_Data render() 
     {
       std::mt19937 engine(m_seed);
 
-      auto probability_map = create_map(m_width, m_height);
+      Map_Data probability_map(m_width, m_height);
       render_terrain_probabilities(probability_map, engine);
       render_probabilities(probability_map, engine);
+      render_features(probability_map, engine);
 
       return probability_map;
     }
 
-    static std::pair<int, int> get_position(int t_map_width, int t_map_height, Location t_location, std::mt19937 &t_engine)
+    static Point get_position(int t_map_width, int t_map_height, Location t_location, std::mt19937 &t_engine)
     {
-      auto ranges = get_position_range(t_map_width, t_map_height, t_location);
-
-      std::uniform_int_distribution<int> xdistribution(ranges.first.first, ranges.first.second);
-      std::uniform_int_distribution<int> ydistribution(ranges.second.first, ranges.second.second);
-
-      return std::make_pair(xdistribution(t_engine), ydistribution(t_engine));
+      return get_position_range(t_map_width, t_map_height, t_location).choose_point(t_engine);
     }
 
-    static std::pair<std::pair<int, int>, std::pair<int, int>>
-      get_position_range(int t_map_width, int t_map_height, Location t_location)
+
+    static Region get_position_range(int t_map_width, int t_map_height, Location t_location)
     {
+      std::vector<Region> regions = Region(t_map_width, t_map_height).subdivide(3,3);
+
+      assert(regions.size() == 9u && "Unexpected number of regions!");
+
       switch (t_location)
       {
-        case NorthEast:
-          return std::make_pair(std::make_pair(t_map_width*2/3, t_map_width), std::make_pair(0, t_map_height/3));
-        case North:
-          return std::make_pair(std::make_pair(t_map_width/3, t_map_width*2/3), std::make_pair(0, t_map_height/3));
         case NorthWest:
-          return std::make_pair(std::make_pair(0, t_map_width/3), std::make_pair(0, t_map_height/3));
-        case East:
-          return std::make_pair(std::make_pair(t_map_width*2/3, t_map_width), std::make_pair(t_map_height/3, t_map_height*2/3));
-        case Central:
-          return std::make_pair(std::make_pair(t_map_width/3, t_map_width*2/3), std::make_pair(t_map_height/3, t_map_height*2/3));
+          return regions[0];
+        case North:
+          return regions[1];
+        case NorthEast:
+          return regions[2];
         case West:
-          return std::make_pair(std::make_pair(0, t_map_width/3), std::make_pair(t_map_height/3, t_map_height*2/3));
-        case SouthEast:
-          return std::make_pair(std::make_pair(t_map_width*2/3, t_map_width), std::make_pair(t_map_height*2/3, t_map_height));
-        case South:
-          return std::make_pair(std::make_pair(t_map_width/3, t_map_width*2/3), std::make_pair(t_map_height*2/3, t_map_height));
+          return regions[3];
+        case Central:
+          return regions[4];
+        case East:
+          return regions[5];
         case SouthWest:
-          return std::make_pair(std::make_pair(0, t_map_width/3), std::make_pair(t_map_height*2/3, t_map_height));
+          return regions[6];
+        case South:
+          return regions[7];
+        case SouthEast:
+          return regions[8];
       }
       assert(!"Unknown location type");
     }
 
     int get_distance(int t_x1, int t_y1, int t_x2, int t_y2)
     {
-      double xdist = abs(t_x1 - t_x2);
-      double ydist = abs(t_y1 - t_y2);
-
-      return floor(sqrt(xdist * xdist + ydist * ydist) + .5);
+      return floor(hypot(abs(t_x1 - t_x2), abs(t_y1 - t_y2)) + .5);
     }
 
-    void normalize_probabilities(std::vector<std::vector<Map_Location>> &t_map) const
+    void normalize_probabilities(Map_Data &t_map) const
     {
-      for (auto &outer: t_map)
+      for (int x = 0; x < m_width; ++x)
       {
-        for (auto &inner: outer)
+        for (int y = 0; y < m_height; ++y)
         {
           double sum_of_probabilities = 0;
 
-          for (const auto &probability: inner.probabilities)
+          Map_Location &loc = t_map.at(Point(x, y));
+
+          for (const auto &probability: loc.probabilities)
           {
             sum_of_probabilities += probability.first;
           }
 
-          for (auto &probability: inner.probabilities)
+          for (auto &probability: loc.probabilities)
           {
             probability.first = probability.first / sum_of_probabilities;
           }
@@ -391,23 +509,63 @@ class Map
       }
     }
 
-    void render_probabilities(std::vector<std::vector<Map_Location>> &t_map, std::mt19937 &t_engine)
+    void render_features(Map_Data &t_map, std::mt19937 &t_engine)
+    {
+      std::vector<Map_Feature> features = m_features;
+
+
+      std::map<Location, std::vector<Map_Feature>> features_by_location;
+
+      for (const auto &feature: m_features)
+      {
+        features_by_location[feature.location].push_back(feature);
+      }
+
+      for (const auto &locationfeature: features_by_location)
+      {
+        Location location = locationfeature.first;
+
+        auto locationregion = get_position_range(m_width, m_height, location);
+
+        int size = locationfeature.second.size();
+
+        int griddivision = ceil(sqrt(size));
+        std::vector<Region> subregions = locationregion.subdivide(griddivision, griddivision);
+
+        std::random_shuffle(subregions.begin(), subregions.end(), 
+            [&](int i){ return std::uniform_int_distribution<>(0,i-1)(t_engine);  } );
+
+        for (int i = 0; i < size; ++i)
+        {
+          const Map_Feature &feature = locationfeature.second[i];
+
+          Point p = subregions[i].choose_point(t_engine);
+
+          t_map.at(p).feature = feature.type;
+        }
+
+      }
+    }
+
+    void render_probabilities(Map_Data &t_map, std::mt19937 &t_engine)
     {
       std::uniform_real_distribution<double> distribution(0, 1.0);
 
-      for (auto &outer: t_map)
+      for (int x = 0; x < m_width; ++x)
       {
-        for (auto &inner: outer)
+        for (int y = 0; y < m_height; ++y)
         {
           double val = distribution(t_engine);
 
           double total = 0;
 
-          for (const auto &probability: inner.probabilities)
+          Map_Location &loc = t_map.at(Point(x, y));
+
+          for (const auto &probability: loc.probabilities)
           {
             if (val > total && val <= probability.first + total)
             {
-              inner.type = probability.second;
+              loc.terrain = probability.second;
               break;
             }
 
@@ -436,52 +594,6 @@ class Map
       assert(!"unknown type");
     }
 
-
-       /*
-       Terrain_Type render_position(int t_map_width, int t_map_height, int t_x, int t_y)
-       {
-       std::vector<std::pair<double, Terrain_Type> > probabilities = get_probabilities(t_map_width, t_map_height, t_x, t_y);
-
-       double val = double(rand()) / double(RAND_MAX);
-
-       double total = 0;
-
-       for (const auto &probability: probabilities)
-       {
-       if (val > total && val <= probability.first + total)
-       {
-       return probability.second;
-       }
-
-       total += probability.first;
-       }
-
-       assert(!"We cannot reach here");
-       }
-
-       void render_html(const std::string &t_filename, int t_map_width, int t_map_height)
-       {
-
-       std::ofstream ofs(t_filename.c_str());
-
-       ofs << "<table>";
-       for (int x = 0; x < t_map_width; ++x)
-       {
-       ofs << "<tr>";
-       for (int y = 0; y < t_map_height; ++y)
-       {
-       ofs << "<td>";
-       Terrain_Type t = render_position(t_map_width, t_map_height, x, y);
-
-       ofs << to_string(t);
-       ofs << "</td>";
-       }
-
-       ofs << "</tr>";
-       }
-       ofs << "</table>";
-       }
-       */
 
 
 
