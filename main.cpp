@@ -413,7 +413,6 @@ struct Map_Data
 
   void add_feature(Feature_Type t_type, Point t_p)
   {
-    std::cout << "Adding feature at: " << t_p.x << " " << t_p.y << std::endl;
     features.push_back(Map_Data_Feature(t_p, t_type));
   }
 
@@ -668,6 +667,7 @@ int main()
   m.add_map_feature(Map_Feature(SouthWest, Town));
   m.add_map_feature(Map_Feature(SouthWest, Town));
   m.add_map_feature(Map_Feature(SouthWest, Cave));
+  m.add_map_feature(Map_Feature(NorthEast, Town));
 
   //m.dump_probabilities("probabilities.csv");
 
