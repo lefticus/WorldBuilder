@@ -31,7 +31,8 @@ enum Terrain_Type
   Mountain,
   Plain,
   Water,
-  Swamp
+  Swamp,
+  Forest
 };
 
 enum Feature_Type
@@ -227,14 +228,16 @@ struct Region
     double regionwidth = width();
     double regionheight = height();
 
+    Point topleft = top_left();
+
     for (int h = 0; h < t_vertical; ++h)
     {
       for (int w = 0; w < t_horizontal; ++w)
       {
         regions.push_back(
             {
-              { regionwidth * w / t_horizontal, regionheight * h / t_vertical },
-              { regionwidth * (w + 1) / t_horizontal, regionheight * (h + 1) / t_vertical }
+              { regionwidth * w / t_horizontal + topleft.x, regionheight * h / t_vertical + topleft.y },
+              { regionwidth * (w + 1) / t_horizontal + topleft.x, regionheight * (h + 1) / t_vertical + topleft.y }
             }
             );
 
@@ -266,13 +269,21 @@ struct Region
     return fabs(p1.y - p2.y);
   }
 
+  Point top_left() const
+  {
+    return Point(std::min(p1.x, p2.x), std::min(p1.y, p2.y));
+  }
+
 
   Point choose_point(std::mt19937 &t_engine) const
   {
     std::uniform_real_distribution<double> xdistribution(std::min(p1.x, p2.x), std::max(p1.x, p2.x));
     std::uniform_real_distribution<double> ydistribution(std::min(p1.y, p2.y), std::max(p1.y, p2.y));
 
-    return Point(xdistribution(t_engine), ydistribution(t_engine));
+    double x = xdistribution(t_engine);
+    double y = ydistribution(t_engine);
+
+    return Point(x, y);
   }
 
   Point p1;
@@ -377,7 +388,19 @@ struct Map_Data
     Terrain_Type type;
   };
 
+  struct Map_Data_Feature
+  {
+    Map_Data_Feature(const Point &t_point, Feature_Type t_type)
+      : point(t_point), type(t_type)
+    {
+    }
+
+    Point point;
+    Feature_Type type;
+  };
+
   std::vector<Map_Data_Terrain> terrains;
+  std::vector<Map_Data_Feature> features;
 
   Terrain_Type background;
 
@@ -388,9 +411,30 @@ struct Map_Data
     terrains.push_back(Map_Data_Terrain(shape, t_type));
   }
 
+  void add_feature(Feature_Type t_type, Point t_p)
+  {
+    std::cout << "Adding feature at: " << t_p.x << " " << t_p.y << std::endl;
+    features.push_back(Map_Data_Feature(t_p, t_type));
+  }
+
   Region region() const
   {
     return Region(1.0, 1.0);
+  }
+
+  std::vector<std::pair<Point, Feature_Type>> map_features(double t_width, double t_height) const
+  {
+    double region_width = region().width();
+    double region_height = region().height();
+
+    std::vector<std::pair<Point, Feature_Type>> retval;
+
+    for (const Map_Data_Feature &feature: features)
+    {
+      retval.push_back(std::make_pair(Point(t_width * (feature.point.x / region_width), t_height * (feature.point.y / region_height)), feature.type));
+    }
+
+    return retval;
   }
 
   Map_Location at(double t_width, double t_height, Point t_p) const
@@ -452,6 +496,11 @@ class Map
       Object mountain("mountainvoxel.png");
       Object swamp("swampvoxel.png");
       Object water("watervoxel.png");
+      Object forest("forestvoxel.png");
+      Object plain("plainvoxel.png");
+      Object cave("cavevoxel.png");
+      Object town("townvoxel.png");
+
 
       t_screen.getSurface().clear();
 
@@ -478,7 +527,31 @@ class Map
             case Water:
               water.render(t_screen.getSurface(), renderx, rendery);
               break;
+            case Forest:
+              forest.render(t_screen.getSurface(), renderx, rendery);
+              break;
+            case Plain:
+              plain.render(t_screen.getSurface(), renderx, rendery);
+              break;
           };
+        }
+      }
+
+      auto features = m_map.map_features(width, height);
+
+      for (const auto &feature: features)
+      {
+        int renderx = floor(feature.first.x) * 16 - 4;
+        int rendery = floor(feature.first.y) * 16 - 4;
+
+        switch (feature.second)
+        {
+          case Cave:
+            cave.render(t_screen.getSurface(), renderx, rendery);
+            break;
+          case Town:
+            town.render(t_screen.getSurface(), renderx, rendery);
+            break;
         }
       }
 
@@ -517,7 +590,6 @@ class Map
 
     void render_features(Map_Data &t_map, std::mt19937 &t_engine)
     {
-      /*
       std::vector<Map_Feature> features = m_features;
 
       std::map<Location, std::vector<Map_Feature>> features_by_location;
@@ -531,7 +603,7 @@ class Map
       {
         Location location = locationfeature.first;
 
-        auto locationregion = get_position_range(m_width, m_height, location);
+        auto locationregion = t_map.region().get_location(location);
 
         int size = locationfeature.second.size();
 
@@ -547,12 +619,11 @@ class Map
 
           Point p = subregions[i].choose_point(t_engine);
 
-          t_map.at(p).feature = feature.type;
+          t_map.add_feature(feature.type, p);
         }
 
       }
 
-      */
     }
 
 
@@ -569,6 +640,8 @@ class Map
           return "Swamp";
         case Water:
           return "Water";
+        case Forest:
+          return "Forest";
       }
 
       assert(!"unknown type");
@@ -585,10 +658,16 @@ int main()
   Map m(Swamp);
 
 
+  m.add_terrain(Map_Terrain(East, Forest));
+  m.add_terrain(Map_Terrain(West, Plain));
   m.add_terrain(Map_Terrain(Central, Mountain));
   m.add_terrain(Map_Terrain(NorthEast, Mountain));
   m.add_terrain(Map_Terrain(NorthWest, Water));
   m.add_terrain(Map_Terrain(South, Mountain));
+
+  m.add_map_feature(Map_Feature(SouthWest, Town));
+  m.add_map_feature(Map_Feature(SouthWest, Town));
+  m.add_map_feature(Map_Feature(SouthWest, Cave));
 
   //m.dump_probabilities("probabilities.csv");
 
