@@ -79,25 +79,25 @@ class Map_Instance
 class Map
 {
   public:
-  Map(Terrain_Type t_background);
+    Map(Terrain_Type t_background);
 
-  void add_terrain(Map_Terrain t_terrain);
+    void add_terrain(Map_Terrain t_terrain);
 
-  void add_map_feature(Map_Feature t_feature);
+    void add_map_feature(Map_Feature t_feature);
 
-  Map_Instance render(int t_tile_width, int t_tile_height, int t_num_horizontal, int t_num_vertical, std::mt19937 &t_engine) const;
+    Map_Instance render(int t_tile_width, int t_tile_height, int t_num_horizontal, int t_num_vertical, std::mt19937 &t_engine) const;
 
   private:
-  struct Map_Rendered;
-  Terrain_Type m_background;
-  std::vector<Map_Terrain> m_terrains;
-  std::vector<Map_Feature> m_features;
-  int m_seed;
+    struct Map_Rendered;
+    Terrain_Type m_background;
+    std::vector<Map_Terrain> m_terrains;
+    std::vector<Map_Feature> m_features;
+    int m_seed;
 
-  void render_terrain(Map_Rendered &t_map, std::mt19937 &t_engine) const;
-  void render_features(Map_Rendered &t_map, std::mt19937 &t_engine) const;
+    void render_terrain(Map_Rendered &t_map, std::mt19937 &t_engine) const;
+    void render_features(Map_Rendered &t_map, std::mt19937 &t_engine) const;
 
-  Map_Instance make_instance(int t_tile_width, int t_tile_height, int t_num_horizontal, int t_num_vertical, Map_Rendered &t_map) const;
+    Map_Instance make_instance(int t_tile_width, int t_tile_height, int t_num_horizontal, int t_num_vertical, Map_Rendered &t_map) const;
 };
 
 
