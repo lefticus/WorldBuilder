@@ -21,6 +21,6 @@ ELSE()
 ENDIF()
 
 
-add_executable(worldbuilder main.cpp Map.cpp)
+add_executable(worldbuilder main.cpp Map.cpp Point.cpp Region.cpp Shape.cpp World.cpp)
 
 target_link_libraries(worldbuilder ${SDL_LIBRARY} ${SDLIMAGE_LIBRARY} )
