@@ -23,11 +23,12 @@ class World_Instance
 class World
 {
   public:
-    World(const Map &t_map);
+    World();
     World_Instance render(int t_tile_width, int t_tile_height, int t_num_horizontal, int t_num_vertical, int t_seed) const;
+    void add_map(const Map &t_map);
 
   private:
-    Map m_map;
+    std::vector<Map> m_maps;
 };
 
 #endif

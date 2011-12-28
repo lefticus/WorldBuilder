@@ -13,15 +13,19 @@ const Map_Instance &World_Instance::get_current_map() const
 }
 
 
-World::World(const Map &t_map)
-  : m_map(t_map)
+World::World()
 {
+}
+
+void World::add_map(const Map &t_map)
+{
+  m_maps.push_back(t_map);
 }
 
 World_Instance World::render(int t_tile_width, int t_tile_height, int t_num_horizontal, int t_num_vertical, int t_seed) const
 {
   std::mt19937 engine(t_seed);
-  World_Instance wi(t_tile_width, t_tile_height, t_num_horizontal, t_num_vertical, engine, m_map);
+  World_Instance wi(t_tile_width, t_tile_height, t_num_horizontal, t_num_vertical, engine, m_maps.at(0));
 
   return wi;
 }

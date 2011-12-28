@@ -1,22 +1,14 @@
 #include "SDL.hpp"
 
-int main()
+#include "ChaiScript_Builder.hpp"
+
+int main(int , char *argv[])
 {
-  Map m(Swamp);
+  World world;
 
-  m.add_terrain(Map_Terrain(East, Forest));
-  m.add_terrain(Map_Terrain(West, Plain));
-  m.add_terrain(Map_Terrain(Central, Mountain));
-  m.add_terrain(Map_Terrain(NorthEast, Mountain));
-  m.add_terrain(Map_Terrain(NorthWest, Water));
-  m.add_terrain(Map_Terrain(South, Mountain));
-
-  m.add_map_feature(Map_Feature(SouthWest, Town));
-  m.add_map_feature(Map_Feature(SouthWest, Town));
-  m.add_map_feature(Map_Feature(SouthWest, Cave));
-  m.add_map_feature(Map_Feature(NorthEast, Town));
-
-  World world(m);
+  std::shared_ptr<chaiscript::ChaiScript> chai = ChaiScript_Builder::build();
+  chai->add(chaiscript::var(std::ref(world)), "world");
+  chai->eval_file(argv[1]);
 
   SDL_Engine e(world);
   e.run(); 

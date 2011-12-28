@@ -20,7 +20,7 @@ ELSE()
   ENDIF()
 ENDIF()
 
+add_executable(worldbuilder main.cpp Map.cpp Point.cpp Region.cpp Shape.cpp World.cpp ChaiScript_Builder.cpp ChaiScript_Creator.cpp)
 
-add_executable(worldbuilder main.cpp Map.cpp Point.cpp Region.cpp Shape.cpp World.cpp)
-
+include_directories(/home/jason/Programming/ChaiScript/include)
 target_link_libraries(worldbuilder ${SDL_LIBRARY} ${SDLIMAGE_LIBRARY} )
