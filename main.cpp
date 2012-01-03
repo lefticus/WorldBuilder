@@ -12,7 +12,6 @@ int main(int , char *argv[])
 
   SDL_Engine e(world);
   e.run(); 
-
 }
 
 

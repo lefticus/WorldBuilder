@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <string>
 
+
 #include "World.hpp"
 
 #include <SDL/SDL.h>
@@ -151,21 +152,28 @@ class SDL_Engine
 
     void run()
     {
-      int frame = 0;
+      m_world->start();
+
+      typedef std::conditional<std::chrono::high_resolution_clock::is_monotonic, std::chrono::high_resolution_clock, std::chrono::monotonic_clock>::type clocktype;
+
+      clocktype::time_point t1 = clocktype::now();
+
       while (true)
       {
-        render_sdl(m_screen, m_world.get_current_map());
-        ++frame;
+        clocktype::time_point t2 = clocktype::now();
+        clocktype::duration frame_duration = t2 - t1;
 
-        if (time(0) % 5 == 0)
-        {
-          std::cout << "FPS: " << double(frame) / 5 << std::endl;
-          frame = 0;
-        }
+        t1 = t2;
+
+        double frame_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(frame_duration).count();
+
+        render_sdl(m_screen, m_world->get_current_simulation());
+
+        std::cout << "SDL FPS: " <<  (1 / frame_ms) * 1000 << std::endl;
       }
     }
 
-    void render_sdl(Screen &t_screen, const Map_Instance &t_map) const
+    void render_sdl(Screen &t_screen, const Simulation &t_simulation) const
     {
       Object mountain("mountainvoxel.png");
       Object swamp("swampvoxel.png");
@@ -178,8 +186,8 @@ class SDL_Engine
 
       t_screen.getSurface().clear();
 
-      int width = t_map.num_horizontal();
-      int height = t_map.num_vertical();
+      int width = t_simulation.map.num_horizontal();
+      int height = t_simulation.map.num_vertical();
 
       for (int x = 0; x < width; ++x)
       {
@@ -190,7 +198,7 @@ class SDL_Engine
           int rendery = y * 16 - 4;
 
 
-          switch (t_map.at(x,y).terrain_type)
+          switch (t_simulation.map.at(x,y).terrain_type)
           {
             case Mountain:
               mountain.render(t_screen.getSurface(), renderx, rendery);
@@ -209,7 +217,7 @@ class SDL_Engine
               break;
           };
 
-          switch (t_map.at(x,y).feature_type)
+          switch (t_simulation.map.at(x,y).feature_type)
           {
             case Cave:
               cave.render(t_screen.getSurface(), renderx, rendery);
@@ -228,7 +236,7 @@ class SDL_Engine
     }
 
   private:
-    World_Instance m_world;
+    std::shared_ptr<World_Instance> m_world;
     Screen m_screen;
 
 };
